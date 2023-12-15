@@ -24,7 +24,11 @@ export class AuthController {
 			}
 			const token = encrypt.generateToken({ id: user.id });
 
-			return res.status(200).json({ message: 'Login successful', user, token });
+			return res.status(200).json({
+				message: 'Login successful',
+				token,
+				user: { ...user, password: null },
+			});
 		} catch (error) {
 			console.error(error);
 			return res.status(500).json({ message: 'Internal server error' });
@@ -56,9 +60,11 @@ export class AuthController {
 			await userRepository.save(user);
 			const token = encrypt.generateToken({ id: user.id });
 
-			return res
-				.status(200)
-				.json({ message: 'User created successfully', token, user });
+			return res.status(200).json({
+				message: 'User created successfully',
+				token,
+				user: { ...user, password: null },
+			});
 		} catch (error) {
 			console.error(error);
 			return res.status(500).json({ message: 'Internal server error' });
