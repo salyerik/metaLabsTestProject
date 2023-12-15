@@ -2,25 +2,25 @@ import { Request, Response } from 'express';
 import { AppDataSource } from '../data-source';
 import { User } from '../entity/User.entity';
 import { encrypt } from '../helpers/helpers';
+import { validationResult } from 'express-validator';
 
 export class AuthController {
 	static async login(req: Request, res: Response) {
 		try {
-			const { email, password } = req.body;
-			if (!email || !password) {
-				return res
-					.status(500)
-					.json({ message: 'Email and password are required' });
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ message: errors.array()[0].msg });
 			}
+			const { email, password } = req.body;
 
 			const userRepository = AppDataSource.getRepository(User);
-			const user = await userRepository.findOne({ where: { email } });
-
+			const user = await userRepository.findOneBy({ email });
+			if (!user) {
+				return res.status(404).json({ message: 'User is not found' });
+			}
 			const isPasswordValid = encrypt.comparePassword(user.password, password);
-			if (!user || !isPasswordValid) {
-				return res
-					.status(404)
-					.json({ message: 'User is not found or incorrect password' });
+			if (!isPasswordValid) {
+				return res.status(404).json({ message: 'Incorrect password' });
 			}
 			const token = encrypt.generateToken({ id: user.id });
 
@@ -33,13 +33,26 @@ export class AuthController {
 
 	static async signup(req: Request, res: Response) {
 		try {
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ message: errors.array()[0].msg });
+			}
 			const { name, email, password } = req.body;
+
+			const userRepository = AppDataSource.getRepository(User);
+
+			const candidate = await userRepository.findOneBy({ email });
+			if (candidate) {
+				return res
+					.status(400)
+					.json({ message: `User with email: ${email} already exists` });
+			}
+
 			const encryptedPassword = encrypt.encryptPassword(password);
 			const user = new User();
 			user.name = name;
 			user.email = email;
 			user.password = encryptedPassword;
-			const userRepository = AppDataSource.getRepository(User);
 			await userRepository.save(user);
 			const token = encrypt.generateToken({ id: user.id });
 
@@ -57,9 +70,7 @@ export class AuthController {
 			return res.status(401).json({ message: 'Unauthorized' });
 		}
 		const userRepository = AppDataSource.getRepository(User);
-		const user = await userRepository.findOne({
-			where: { id: req['currentUser'].id },
-		});
+		const user = await userRepository.findOneBy({ id: req['currentUser'].id });
 		return res.status(200).json({ ...user, password: undefined });
 	}
 }
